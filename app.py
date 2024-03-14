@@ -5,6 +5,7 @@ import uuid
 import time
 
 from IPython.display import Audio
+from jinja2 import Template
 
 
 #Boto Clients
@@ -100,3 +101,47 @@ if status['TranscriptionJob']['TranscriptionJobStatus'] == 'COMPLETED':
     # Save the transcript to a text file
     with open(f'./transcripts/{job_name}.txt', 'w') as f:
         f.write(output_text)
+
+
+# Let's summarize the content with an LLM
+with open(f'./transcripts/{job_name}.txt', "r") as file:
+    transcript = file.read()
+
+#Load in our template from an external template for separation of concerns
+with open('prompt_template.txt', "r") as file:
+    template_string = file.read()
+
+print("template string:")
+print(template_string) 
+
+data = {
+    'transcript' : transcript
+}
+template = Template(template_string)
+prompt = template.render(data)
+
+print("prompt")
+print(prompt)
+
+# Now use an LLM to summarize
+kwargs = {
+    "modelId": "amazon.titan-text-express-v1",
+    "contentType": "application/json",
+    "accept": "*/*",
+    "body": json.dumps(
+        {
+            "inputText": prompt,
+            "textGenerationConfig": {
+                "maxTokenCount": 500,
+                "temperature": 0,
+                "topP": 0.9
+            }
+        }
+    )
+}
+response = bedrock_runtime.invoke_model(**kwargs)
+
+print(response)
+response_body = json.loads(response.get('body').read())
+print(json.dumps(response_body, indent=4))
+print(response_body['results'][0]['outputText'])
